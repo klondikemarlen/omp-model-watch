@@ -22,6 +22,10 @@ test("when a main session stays idle for a day, shows a new listing without inpu
     },
     agentDir: "/test-profile",
     ui: {
+      theme: {
+        bold: text => text,
+        fg: (_color, text) => text,
+      },
       setStatus: statuses.set.bind(statuses),
     },
     setTimeout(callback, delay) {

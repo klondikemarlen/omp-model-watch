@@ -1,13 +1,33 @@
 import { createFetchSelectors } from "./lib/catalog.js"
 import { checkWhenDue } from "./lib/watch.js"
 
-const HINT_KEY = "omp-model-watch.hint"
+// OMP sorts footer status keys. Trainer owns zz-omp-trainer.hint.*.
+const HINT_KEY = "zzz-model-watch"
 const FAILURE_RETRY_MS = 60 * 60 * 1000
+const localCheckTime = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+})
 
 function showListing(ui, key, selectors, label) {
-  ui.setStatus(key, label + ": reassess your model choices.")
-  for (const [index, selector] of selectors.entries()) {
-    ui.setStatus(key + "." + index, selector)
+  const { theme } = ui
+  const border = theme.fg("warning", "─".repeat(process.stdout.columns || 80))
+  const rows = [
+    border,
+    theme.bold(theme.fg("warning", label)),
+    theme.fg("muted", "Reassess your model choices:"),
+    ...selectors.map(selector => theme.fg("accent", selector)),
+    border,
+  ]
+  const keys = rows.map((_, index) => `${key}.${String(index).padStart(5, "0")}`)
+  rows.forEach((row, index) => ui.setStatus(keys[index], row))
+
+  return () => {
+    for (const rowKey of keys) ui.setStatus(rowKey, undefined)
   }
 }
 
@@ -15,7 +35,8 @@ export function registerModelWatch(pi, check) {
   pi.setLabel("Model Watch")
   let stop
   let status = "Waiting for an interactive session."
-  let hintRows = 0
+  let clearListing
+  let demoTimer
 
   pi.on("session_start", (_event, ctx) => {
     stop?.()
@@ -25,11 +46,8 @@ export function registerModelWatch(pi, check) {
     const fetchSelectors = createFetchSelectors(ctx.modelRegistry)
 
     function showAdditions(added) {
-      for (let i = added.length; i < hintRows; i++) {
-        ctx.ui.setStatus(HINT_KEY + "." + i, undefined)
-      }
-      showListing(ctx.ui, HINT_KEY, added, "New openai-codex listings")
-      hintRows = added.length
+      clearListing?.()
+      clearListing = showListing(ctx.ui, HINT_KEY + ".live", added, "New openai-codex listings")
     }
 
     let timer
@@ -55,7 +73,7 @@ export function registerModelWatch(pi, check) {
         status = "Check unavailable: could not access the profile watch state."
         nextCheckAt = Date.now() + FAILURE_RETRY_MS
       }
-      status += " Next check: " + new Date(nextCheckAt).toISOString()
+      status += " Next check: " + localCheckTime.format(nextCheckAt)
       timer = ctx.setTimeout(tick, Math.max(1, nextCheckAt - Date.now()))
     }
 
@@ -85,11 +103,9 @@ export function registerModelWatch(pi, check) {
       const action = args.trim()
       if (action === "demo") {
         const key = HINT_KEY + ".sample"
-        showListing(ctx.ui, key, ["openai-codex/example-model"], "Model Watch demo")
-        ctx.setTimeout(() => {
-          ctx.ui.setStatus(key, undefined)
-          ctx.ui.setStatus(key + ".0", undefined)
-        }, 8000)
+        if (demoTimer) ctx.clearTimer(demoTimer)
+        const clearDemo = showListing(ctx.ui, key, ["openai-codex/example-model"], "Model Watch demo")
+        demoTimer = ctx.setTimeout(clearDemo, 8000)
         return
       }
       if (!action || action === "status") {
