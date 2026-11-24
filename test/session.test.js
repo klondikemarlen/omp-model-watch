@@ -5,7 +5,8 @@ import { registerModelWatch } from "../index.js"
 
 const DAY = 24 * 60 * 60 * 1000
 
-test("an idle main session shows a new listing on its next daily check without user input", async t => {
+test("when a main session stays idle for a day, shows a new listing without input", async t => {
+  // Arrange
   const start = Date.UTC(2026, 0, 1)
   t.mock.timers.enable({
     apis: ["Date"],
@@ -49,8 +50,11 @@ test("an idle main session shows a new listing on its next daily check without u
     }
   })
 
+  // Act
   events.get("session_start")({}, ctx)
   await timer.callback()
+
+  // Assert
   assert.deepEqual([...statuses.values()], [])
   assert.equal(timer.delay, DAY)
 

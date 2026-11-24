@@ -25,7 +25,8 @@ async function createProfile(t) {
   return agentDir
 }
 
-test("baselines silently, skips until due, and checks again exactly one day later", async (t) => {
+test("when the profile is new, records a silent baseline and waits one day to refresh", async (t) => {
+  // Arrange
   const agentDir = await createProfile(t)
   let time = START
   let fetchCount = 0
@@ -38,7 +39,11 @@ test("baselines silently, skips until due, and checks again exactly one day late
     },
   }
 
-  assert.deepEqual(await checkWhenDue(options), {
+  // Act
+  const baseline = await checkWhenDue(options)
+
+  // Assert
+  assert.deepEqual(baseline, {
     nextCheckAt: START + DAY,
     added: [],
   })
@@ -58,7 +63,8 @@ test("baselines silently, skips until due, and checks again exactly one day late
   assert.equal(fetchCount, 2)
 })
 
-test("reports exact new selectors once, including when models disappear and return", async (t) => {
+test("when listings disappear and return, reports only previously unseen selectors", async (t) => {
+  // Arrange
   const agentDir = await createProfile(t)
   let time = START
   let selectors = [EXISTING]
@@ -69,10 +75,14 @@ test("reports exact new selectors once, including when models disappear and retu
   }
   await checkWhenDue(options)
 
+  // Act
   time += 3 * DAY
   const otherNew = "openai-codex/another-new"
   selectors = [NEW, NEW, otherNew]
-  assert.deepEqual(await checkWhenDue(options), {
+  const afterDowntime = await checkWhenDue(options)
+
+  // Assert
+  assert.deepEqual(afterDowntime, {
     nextCheckAt: START + 4 * DAY,
     added: [NEW, otherNew],
   })
@@ -92,7 +102,8 @@ test("reports exact new selectors once, including when models disappear and retu
   })
 })
 
-test("shares failure backoff and keeps the last good baseline on recovery", async (t) => {
+test("when discovery fails, shares a retry deadline and preserves the baseline", async (t) => {
+  // Arrange
   const agentDir = await createProfile(t)
   await checkWhenDue({
     agentDir,
@@ -100,6 +111,7 @@ test("shares failure backoff and keeps the last good baseline on recovery", asyn
     fetchSelectors: async () => [EXISTING],
   })
 
+  // Act
   const failure = await checkWhenDue({
     agentDir,
     now: () => START + DAY,
@@ -107,6 +119,8 @@ test("shares failure backoff and keeps the last good baseline on recovery", asyn
       throw new Error("catalog unavailable")
     },
   })
+
+  // Assert
   const retryAt = START + DAY + 15 * MINUTE
   assert.deepEqual(failure, {
     nextCheckAt: retryAt,
@@ -133,13 +147,18 @@ test("shares failure backoff and keeps the last good baseline on recovery", asyn
   })
 })
 
-test("an empty catalog cannot establish the initial baseline", async (t) => {
+test("when the first catalog is empty, waits for a valid baseline", async (t) => {
+  // Arrange
   const agentDir = await createProfile(t)
+
+  // Act
   const failure = await checkWhenDue({
     agentDir,
     now: () => START,
     fetchSelectors: async () => [],
   })
+
+  // Assert
   assert.deepEqual(failure, {
     nextCheckAt: START + 15 * MINUTE,
     added: [],
@@ -157,9 +176,12 @@ test("an empty catalog cannot establish the initial baseline", async (t) => {
   })
 })
 
-test("an aborted refresh does not record a catalog or delay other sessions", async (t) => {
+test("when the session aborts discovery, leaves another terminal free to establish the baseline", async (t) => {
+  // Arrange
   const agentDir = await createProfile(t)
   const controller = new AbortController()
+
+  // Act
   const result = await checkWhenDue({
     agentDir,
     now: () => START,
@@ -170,6 +192,8 @@ test("an aborted refresh does not record a catalog or delay other sessions", asy
       return [EXISTING]
     },
   })
+
+  // Assert
   assert.equal(result.error, "session ended")
 
   let fetchCount = 0
@@ -187,9 +211,10 @@ test("an aborted refresh does not record a catalog or delay other sessions", asy
   assert.equal(fetchCount, 1)
 })
 
-test("a competing process does not refresh, and a crashed owner leaves no stale lock", {
+test("when a competing process crashes, releases its exclusive check without losing the baseline", {
   timeout: 10_000,
 }, async (t) => {
+  // Arrange
   const agentDir = await createProfile(t)
   await checkWhenDue({
     agentDir,
@@ -213,6 +238,8 @@ test("a competing process does not refresh, and a crashed owner leaves no stale 
     })
     process.stdin.pause()
   `
+
+  // Act
   const child = spawn(process.execPath, ["--input-type=module", "--eval", holdLock, watchUrl.href, agentDir, String(dueAt)], {
     stdio: ["pipe", "pipe", "inherit"],
   })
@@ -228,6 +255,7 @@ test("a competing process does not refresh, and a crashed owner leaves no stale 
     ])
     assert.equal(ready.toString(), "fetching\n")
 
+    // Assert
     assert.deepEqual(await checkWhenDue({
       agentDir,
       now: () => dueAt,
