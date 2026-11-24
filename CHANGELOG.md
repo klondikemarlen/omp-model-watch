@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.0 — 2026-11-24
+
+- Configure the routine catalog check interval per OMP profile. The default remains 24 hours, and failed discovery still retries after 15 minutes.
+
 ## 0.1.2 — 2026-11-24
 
 - `/model-watch status` now shows how long until the next check or retry instead of a clock time and timezone. The countdown is recalculated whenever you ask.
