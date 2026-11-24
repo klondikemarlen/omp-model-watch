@@ -9,7 +9,7 @@ import { test } from "node:test"
 import { checkWhenDue } from "../lib/watch.js"
 
 const MINUTE = 60_000
-const DAY = 24 * 60 * MINUTE
+const SIX_HOURS = 6 * 60 * MINUTE
 const START = Date.UTC(2026, 10, 24)
 const EXISTING = "openai-codex/gpt-existing"
 const NEW = "openai-codex/gpt-new"
@@ -25,7 +25,34 @@ async function createProfile(t) {
   return agentDir
 }
 
-test("when the profile is new, records a silent baseline and waits one day to refresh", async (t) => {
+test("prolonged outages back off to hourly and recovery resets the next outage", async (t) => {
+  const agentDir = await createProfile(t)
+  let time = START
+  const options = {
+    agentDir,
+    now: () => time,
+    fetchSelectors: async () => {
+      throw new Error("offline")
+    },
+  }
+
+  for (const minutes of [1, 2, 4, 8, 16, 32, 60, 60]) {
+    const failure = await checkWhenDue(options)
+    assert.equal(failure.nextCheckAt, time + minutes * MINUTE)
+    time = failure.nextCheckAt
+  }
+
+  const recovery = await checkWhenDue({
+    ...options,
+    fetchSelectors: async () => [EXISTING],
+  })
+  assert.equal(recovery.nextCheckAt, time + SIX_HOURS)
+  time = recovery.nextCheckAt
+  const nextOutage = await checkWhenDue(options)
+  assert.equal(nextOutage.nextCheckAt, time + MINUTE)
+})
+
+test("when the profile is new, records a silent baseline and waits six hours to refresh", async (t) => {
   // Arrange
   const agentDir = await createProfile(t)
   let time = START
@@ -44,20 +71,20 @@ test("when the profile is new, records a silent baseline and waits one day to re
 
   // Assert
   assert.deepEqual(baseline, {
-    nextCheckAt: START + DAY,
+    nextCheckAt: START + SIX_HOURS,
     added: [],
   })
 
-  time += DAY - 1
+  time += SIX_HOURS - 1
   assert.deepEqual(await checkWhenDue(options), {
-    nextCheckAt: START + DAY,
+    nextCheckAt: START + SIX_HOURS,
     added: [],
   })
   assert.equal(fetchCount, 1)
 
   time += 1
   assert.deepEqual(await checkWhenDue(options), {
-    nextCheckAt: START + 2 * DAY,
+    nextCheckAt: START + 2 * SIX_HOURS,
     added: [],
   })
   assert.equal(fetchCount, 2)
@@ -76,28 +103,28 @@ test("when listings disappear and return, reports only previously unseen selecto
   await checkWhenDue(options)
 
   // Act
-  time += 3 * DAY
+  time += 3 * SIX_HOURS
   const otherNew = "openai-codex/another-new"
   selectors = [NEW, NEW, otherNew]
   const afterDowntime = await checkWhenDue(options)
 
   // Assert
   assert.deepEqual(afterDowntime, {
-    nextCheckAt: START + 4 * DAY,
+    nextCheckAt: START + 4 * SIX_HOURS,
     added: [NEW, otherNew],
   })
 
-  time += DAY
+  time += SIX_HOURS
   selectors = [EXISTING, otherNew]
   assert.deepEqual(await checkWhenDue(options), {
-    nextCheckAt: START + 5 * DAY,
+    nextCheckAt: START + 5 * SIX_HOURS,
     added: [],
   })
 
-  time += DAY
+  time += SIX_HOURS
   selectors = [EXISTING, NEW, otherNew]
   assert.deepEqual(await checkWhenDue(options), {
-    nextCheckAt: START + 6 * DAY,
+    nextCheckAt: START + 6 * SIX_HOURS,
     added: [],
   })
 })
@@ -114,14 +141,14 @@ test("when the interval increases after failure, retries on time before adopting
   // Act
   const failure = await checkWhenDue({
     agentDir,
-    now: () => START + DAY,
+    now: () => START + SIX_HOURS,
     fetchSelectors: async () => {
       throw new Error("catalog unavailable")
     },
   })
 
   // Assert
-  const retryAt = START + DAY + 15 * MINUTE
+  const retryAt = START + SIX_HOURS + MINUTE
   assert.deepEqual(failure, {
     nextCheckAt: retryAt,
     added: [],
@@ -146,7 +173,7 @@ test("when the interval increases after failure, retries on time before adopting
     now: () => retryAt,
     fetchSelectors: async () => [EXISTING, NEW],
   }), {
-    nextCheckAt: retryAt + 2 * DAY,
+    nextCheckAt: retryAt + 48 * 60 * MINUTE,
     added: [NEW],
   })
 })
@@ -164,7 +191,7 @@ test("when the first catalog is empty, waits for a valid baseline", async (t) =>
 
   // Assert
   assert.deepEqual(failure, {
-    nextCheckAt: START + 15 * MINUTE,
+    nextCheckAt: START + MINUTE,
     added: [],
     error: "The model catalog did not return a nonempty list of selectors",
   })
@@ -175,7 +202,7 @@ test("when the first catalog is empty, waits for a valid baseline", async (t) =>
     now: () => nextCheckAt,
     fetchSelectors: async () => [EXISTING, NEW],
   }), {
-    nextCheckAt: nextCheckAt + DAY,
+    nextCheckAt: nextCheckAt + SIX_HOURS,
     added: [],
   })
 })
@@ -209,7 +236,7 @@ test("when the session aborts discovery, leaves another terminal free to establi
       return [EXISTING, NEW]
     },
   }), {
-    nextCheckAt: START + DAY,
+    nextCheckAt: START + SIX_HOURS,
     added: [],
   })
   assert.equal(fetchCount, 1)
@@ -225,7 +252,7 @@ test("when shutdown interrupts the footer, the next session can still show the n
   })
   const due = {
     agentDir,
-    now: () => START + DAY,
+    now: () => START + SIX_HOURS,
     fetchSelectors: async () => [EXISTING, NEW],
   }
   const closing = new AbortController()
@@ -257,7 +284,7 @@ test("when a competing process crashes, releases its exclusive check without los
     fetchSelectors: async () => [EXISTING],
   })
 
-  const dueAt = START + DAY
+  const dueAt = START + SIX_HOURS
   const watchUrl = new URL("../lib/watch.js", import.meta.url)
   const holdLock = `
     const [watchUrl, agentDir, dueAt] = process.argv.slice(1)
@@ -309,7 +336,7 @@ test("when a competing process crashes, releases its exclusive check without los
     now: () => dueAt + MINUTE,
     fetchSelectors: async () => [EXISTING, NEW],
   }), {
-    nextCheckAt: dueAt + MINUTE + DAY,
+    nextCheckAt: dueAt + MINUTE + SIX_HOURS,
     added: [NEW],
   })
 })

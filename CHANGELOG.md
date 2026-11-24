@@ -4,7 +4,7 @@
 
 ## 0.2.0 — 2026-11-24
 
-- Configure the routine catalog check interval per OMP profile. The default remains 24 hours, and failed discovery still retries after 15 minutes.
+- Check every six hours by default, with a configurable interval per profile. Failed discovery retries after one minute and doubles the wait up to one hour until recovery.
 
 ## 0.1.2 — 2026-11-24
 

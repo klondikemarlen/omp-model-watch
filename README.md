@@ -15,17 +15,17 @@ The first successful check quietly records the models already listed. Later chec
 - `/model-watch status` — see whether the watch is healthy or unavailable and how long until its next check, for example `Next check in 3 hours 12 minutes.`
 - `/model-watch demo` — show a labeled example in the footer for eight seconds, without querying the provider or changing watch state.
 
-Interactive main sessions check on startup when due and every 24 hours by default while open, even when idle. Nothing runs while OMP is closed. To change the interval for all terminals in a profile, create `model-watch/config.json` inside the active OMP agent directory (normally `~/.omp/agent`). For example, to check every six hours:
+Interactive main sessions check on startup when due and every 6 hours by default while open, even when idle. Nothing runs while OMP is closed. To change the interval for all terminals in a profile, create `model-watch/config.json` inside the active OMP agent directory (normally `~/.omp/agent`). For example, to check once a day:
 
 ```json
 {
-  "checkIntervalHours": 6
+  "checkIntervalHours": 24
 }
 ```
 
-Use a whole number from 1 to 596 hours (the host timer limit). Remove the setting or file to restore 24 hours. The next startup or scheduled check reads the setting and measures from the last successful check; editing the file alone does not wake an idle timer.
+Use a whole number from 1 to 596 hours (the host timer limit). Remove the setting or file to restore 6 hours. The next startup or scheduled check reads the setting and measures from the last successful check; editing the file alone does not wake an idle timer.
 
-If catalog discovery fails, Model Watch keeps the last good list and waits 15 minutes before trying again. This retry delay is separate from the normal interval and shared across terminals. Use `/model-watch status` to see the failure and retry countdown.
+If discovery fails, Model Watch keeps the last good list. It retries after 1 minute, then 2, 4, 8, 16, 32, and at most 60 minutes between attempts. Terminals share the retry deadline. A successful check resets backoff and resumes the normal interval. Use `/model-watch status` for the countdown.
 
 ## Development
 
