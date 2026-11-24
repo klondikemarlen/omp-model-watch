@@ -1,0 +1,7 @@
+advisors:
+  - name: verifier
+    tools: [bash]
+    instructions: |
+      @~/.omp/agent/verifier/WATCHDOG.md
+
+      Check id project:lint. When index.js, lib/**/*.js, test/**/*.js, eslint.config.js, package.json or package-lock.json changes, run npm run lint in the owning checkout. PASS requires actual exit 0 with ESLint recommended rules covering all JavaScript and no warnings. Violations are FAIL; missing dependencies, configuration or execution are BLOCKED.

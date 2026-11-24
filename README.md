@@ -4,7 +4,7 @@ Get a footer hint when OMP discovers a new `openai-codex` chat model. Use the ex
 
 ## Install and use
 
-Install from the default branch and start a fresh interactive OMP process with a configured Codex subscription:
+Requires Linux with util-linux `flock`, OMP's provider discovery API (tested on 19.1.1), and a configured Codex subscription. Install from the default branch and start a fresh interactive OMP process:
 
 ```sh
 omp plugin install github:klondikemarlen/omp-model-watch
@@ -19,4 +19,4 @@ Interactive main sessions check on startup when due and again every 24 hours whi
 
 ## Development
 
-Use `npm test` for the watch behavior and `omp --no-extensions -e ./index.js` to exercise the terminal commands. GitHub is the install source; the project does not require an npm registry publish. See [release history](CHANGELOG.md).
+With Node 22.13+ or 24+, run `npm ci`, `npm run lint`, and `npm test`. Use `omp --no-extensions -e ./index.js` to exercise the terminal commands. GitHub is the install source; the project does not require an npm registry publish. See [release history](CHANGELOG.md).

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
+
 import { registerModelWatch } from "../index.js"
 
 const DAY = 24 * 60 * 60 * 1000
