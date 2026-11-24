@@ -13,20 +13,30 @@ const localCheckTime = new Intl.DateTimeFormat(undefined, {
   timeZoneName: "short",
 })
 
-function showListing(ui, key, selectors, label) {
+function showListing(ctx, key, selectors, label) {
+  const { ui } = ctx
   const { theme } = ui
-  const border = theme.fg("warning", "─".repeat(process.stdout.columns || 80))
+  function renderBorders() {
+    const border = theme.fg("warning", "─".repeat(process.stdout.columns || 80))
+    ui.setStatus(key + ".0", border)
+    ui.setStatus(key + ".2", border)
+  }
+
+  renderBorders()
   const rows = [
-    border,
     theme.bold(theme.fg("warning", label)),
     theme.fg("muted", "Reassess your model choices:"),
     ...selectors.map(selector => theme.fg("accent", selector)),
-    border,
   ]
-  const keys = rows.map((_, index) => `${key}.${String(index).padStart(5, "0")}`)
+  const keys = rows.map((_, index) => `${key}.1.${String(index).padStart(5, "0")}`)
   rows.forEach((row, index) => ui.setStatus(keys[index], row))
+  const watchResize = ctx.mode === "tui" && process.stdout.isTTY
+  if (watchResize) process.stdout.on("resize", renderBorders)
 
   return () => {
+    if (watchResize) process.stdout.off("resize", renderBorders)
+    ui.setStatus(key + ".0", undefined)
+    ui.setStatus(key + ".2", undefined)
     for (const rowKey of keys) ui.setStatus(rowKey, undefined)
   }
 }
@@ -37,6 +47,7 @@ export function registerModelWatch(pi, check) {
   let status = "Waiting for an interactive session."
   let clearListing
   let demoTimer
+  let clearDemo
 
   pi.on("session_start", (_event, ctx) => {
     stop?.()
@@ -47,7 +58,7 @@ export function registerModelWatch(pi, check) {
 
     function showAdditions(added) {
       clearListing?.()
-      clearListing = showListing(ctx.ui, HINT_KEY + ".live", added, "New openai-codex listings")
+      clearListing = showListing(ctx, HINT_KEY + ".live", added, "New openai-codex listings")
     }
 
     let timer
@@ -82,6 +93,12 @@ export function registerModelWatch(pi, check) {
     stop = () => {
       controller.abort()
       ctx.clearTimer(timer)
+      clearListing?.()
+      clearListing = undefined
+      clearDemo?.()
+      clearDemo = undefined
+      if (demoTimer) ctx.clearTimer(demoTimer)
+      demoTimer = undefined
     }
   })
 
@@ -104,8 +121,13 @@ export function registerModelWatch(pi, check) {
       if (action === "demo") {
         const key = HINT_KEY + ".sample"
         if (demoTimer) ctx.clearTimer(demoTimer)
-        const clearDemo = showListing(ctx.ui, key, ["openai-codex/example-model"], "Model Watch demo")
-        demoTimer = ctx.setTimeout(clearDemo, 8000)
+        clearDemo?.()
+        clearDemo = showListing(ctx, key, ["openai-codex/example-model"], "Model Watch demo")
+        demoTimer = ctx.setTimeout(() => {
+          clearDemo()
+          clearDemo = undefined
+          demoTimer = undefined
+        }, 8000)
         return
       }
       if (!action || action === "status") {
