@@ -10,9 +10,9 @@ Requires Linux with util-linux `flock`, OMP's provider discovery API (tested on 
 omp plugin install github:klondikemarlen/omp-model-watch
 ```
 
-The first successful check quietly records the models already listed. Later checks report only previously unseen selectors. The terminal that detects an addition shows the hint in its own footer rows alongside other extensions, including Trainer.
+The first successful check quietly records the models already listed. Later checks report only previously unseen selectors. The terminal that detects an addition shows an update-style notice below Trainer, if Trainer is present.
 
-- `/model-watch status` — see whether the watch is healthy or unavailable, and when this terminal will check again.
+- `/model-watch status` — see whether the watch is healthy or unavailable and when it will check again, in local time with the time zone.
 - `/model-watch demo` — show a labeled example in the footer for eight seconds, without querying the provider or changing watch state.
 
 Interactive main sessions check on startup when due and again every 24 hours while open, even when idle. Terminals in the same OMP profile share the baseline. Nothing runs when OMP is closed: the next interactive startup catches up. Offline or unsuccessful discovery leaves the last good baseline intact and schedules a retry. If checks keep failing, use `/model-watch status` and check OMP's `openai-codex` authentication and discovery settings; there is no API-key fallback.
