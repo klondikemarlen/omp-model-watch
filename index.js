@@ -4,14 +4,21 @@ import { checkWhenDue } from "./lib/watch.js"
 // OMP sorts footer status keys. Trainer owns zz-omp-trainer.hint.*.
 const HINT_KEY = "zzz-model-watch"
 const FAILURE_RETRY_MS = 60 * 60 * 1000
-const localCheckTime = new Intl.DateTimeFormat(undefined, {
-  weekday: "short",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZoneName: "short",
-})
+
+function formatNextCheck(remainingMs) {
+  if (remainingMs <= 0) return "Next check due now."
+  if (remainingMs < 60_000) return "Next check in less than a minute."
+
+  const totalMinutes = Math.floor(remainingMs / 60_000)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor(totalMinutes / 60) % 24
+  const minutes = totalMinutes % 60
+  const parts = []
+  for (const [amount, unit] of [[days, "day"], [hours, "hour"], [minutes, "minute"]]) {
+    if (amount > 0) parts.push(`${amount} ${unit}${amount === 1 ? "" : "s"}`)
+  }
+  return `Next check in ${parts.join(" ")}.`
+}
 
 function showListing(ctx, key, selectors, label) {
   const { ui } = ctx
@@ -45,6 +52,7 @@ export function registerModelWatch(pi, check) {
   pi.setLabel("Model Watch")
   let stop
   let status = "Waiting for an interactive session."
+  let nextCheckAt
   let clearListing
   let demoTimer
   let clearDemo
@@ -63,7 +71,6 @@ export function registerModelWatch(pi, check) {
 
     let timer
     async function tick() {
-      let nextCheckAt
       try {
         const result = await check({
           agentDir: ctx.agentDir || pi.pi.getAgentDir(),
@@ -84,11 +91,11 @@ export function registerModelWatch(pi, check) {
         status = "Check unavailable: could not access the profile watch state."
         nextCheckAt = Date.now() + FAILURE_RETRY_MS
       }
-      status += " Next check: " + localCheckTime.format(nextCheckAt)
       timer = ctx.setTimeout(tick, Math.max(1, nextCheckAt - Date.now()))
     }
 
     status = "Checking the catalog schedule."
+    nextCheckAt = undefined
     timer = ctx.setTimeout(tick, 0)
     stop = () => {
       controller.abort()
@@ -131,7 +138,11 @@ export function registerModelWatch(pi, check) {
         return
       }
       if (!action || action === "status") {
-        ctx.ui.notify(status, "info")
+        let message = status
+        if (nextCheckAt !== undefined) {
+          message += " " + formatNextCheck(nextCheckAt - Date.now())
+        }
+        ctx.ui.notify(message, "info")
         return
       }
       ctx.ui.notify("Usage: /model-watch [status|demo]", "info")

@@ -1,6 +1,6 @@
 {
   "name": "omp-model-watch",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Passive OMP hints for newly listed provider models.",
   "type": "module",
   "private": true,
