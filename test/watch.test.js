@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { once } from "node:events"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -102,7 +102,7 @@ test("when listings disappear and return, reports only previously unseen selecto
   })
 })
 
-test("when discovery fails, shares a retry deadline and preserves the baseline", async (t) => {
+test("when the interval increases after failure, retries on time before adopting the longer interval", async (t) => {
   // Arrange
   const agentDir = await createProfile(t)
   await checkWhenDue({
@@ -128,6 +128,10 @@ test("when discovery fails, shares a retry deadline and preserves the baseline",
     error: "catalog unavailable",
   })
 
+  await writeFile(join(agentDir, "model-watch", "config.json"), JSON.stringify({
+    checkIntervalHours: 48,
+  }))
+
   const deferred = await checkWhenDue({
     agentDir,
     now: () => retryAt - 1,
@@ -142,7 +146,7 @@ test("when discovery fails, shares a retry deadline and preserves the baseline",
     now: () => retryAt,
     fetchSelectors: async () => [EXISTING, NEW],
   }), {
-    nextCheckAt: retryAt + DAY,
+    nextCheckAt: retryAt + 2 * DAY,
     added: [NEW],
   })
 })
