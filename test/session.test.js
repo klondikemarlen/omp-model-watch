@@ -41,12 +41,12 @@ test("when a main session stays idle for a day, shows a new listing without inpu
     registerCommand() {},
   }
   const selector = "openai-codex/new-chat"
-  registerModelWatch(pi, async () => {
-    const added = []
-    if (Date.now() > start) added.push(selector)
+  registerModelWatch(pi, async ({ onAdded }) => {
+    if (Date.now() > start) {
+      onAdded([selector])
+    }
     return {
       nextCheckAt: Date.now() + DAY,
-      added,
     }
   })
 

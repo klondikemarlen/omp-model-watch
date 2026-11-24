@@ -211,6 +211,37 @@ test("when the session aborts discovery, leaves another terminal free to establi
   assert.equal(fetchCount, 1)
 })
 
+test("when shutdown interrupts the footer, the next session can still show the new listing", async (t) => {
+  // Arrange
+  const agentDir = await createProfile(t)
+  await checkWhenDue({
+    agentDir,
+    now: () => START,
+    fetchSelectors: async () => [EXISTING],
+  })
+  const due = {
+    agentDir,
+    now: () => START + DAY,
+    fetchSelectors: async () => [EXISTING, NEW],
+  }
+  const closing = new AbortController()
+  const shown = []
+
+  // Act
+  await checkWhenDue({
+    ...due,
+    signal: closing.signal,
+    onAdded: () => closing.abort(),
+  })
+  await checkWhenDue({
+    ...due,
+    onAdded: selectors => shown.push(...selectors),
+  })
+
+  // Assert
+  assert.deepEqual(shown, [NEW])
+})
+
 test("when a competing process crashes, releases its exclusive check without losing the baseline", {
   timeout: 10_000,
 }, async (t) => {

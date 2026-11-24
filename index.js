@@ -23,6 +23,15 @@ export function registerModelWatch(pi, check) {
 
     const controller = new AbortController()
     const fetchSelectors = createFetchSelectors(ctx.modelRegistry)
+
+    function showAdditions(added) {
+      for (let i = added.length; i < hintRows; i++) {
+        ctx.ui.setStatus(HINT_KEY + "." + i, undefined)
+      }
+      showListing(ctx.ui, HINT_KEY, added, "New openai-codex listings")
+      hintRows = added.length
+    }
+
     let timer
     async function tick() {
       let nextCheckAt
@@ -30,6 +39,7 @@ export function registerModelWatch(pi, check) {
         const result = await check({
           agentDir: ctx.agentDir || pi.pi.getAgentDir(),
           fetchSelectors,
+          onAdded: showAdditions,
           signal: controller.signal,
         })
         if (controller.signal.aborted) return
@@ -39,13 +49,6 @@ export function registerModelWatch(pi, check) {
           status = "Check unavailable: " + result.error
         } else {
           status = "Watching openai-codex."
-        }
-        if (result.added.length > 0) {
-          for (let i = result.added.length; i < hintRows; i++) {
-            ctx.ui.setStatus(HINT_KEY + "." + i, undefined)
-          }
-          showListing(ctx.ui, HINT_KEY, result.added, "New openai-codex listings")
-          hintRows = result.added.length
         }
       } catch {
         if (controller.signal.aborted) return
