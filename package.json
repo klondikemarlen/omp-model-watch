@@ -1,0 +1,25 @@
+{
+  "name": "omp-model-watch",
+  "version": "0.1.0",
+  "description": "Passive OMP hints for newly listed provider models.",
+  "type": "module",
+  "private": true,
+  "files": [
+    "index.js",
+    "lib",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "omp": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klondikemarlen/omp-model-watch.git"
+  }
+}
