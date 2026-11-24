@@ -25,7 +25,8 @@ async function createProfile(t) {
   return agentDir
 }
 
-test("prolonged outages back off to hourly and recovery resets the next outage", async (t) => {
+test("when discovery stays offline, backs off to hourly and resets after recovery", async (t) => {
+  // Arrange
   const agentDir = await createProfile(t)
   let time = START
   const options = {
@@ -36,6 +37,7 @@ test("prolonged outages back off to hourly and recovery resets the next outage",
     },
   }
 
+  // Act
   for (const minutes of [1, 2, 4, 8, 16, 32, 60, 60]) {
     const failure = await checkWhenDue(options)
     assert.equal(failure.nextCheckAt, time + minutes * MINUTE)
@@ -46,6 +48,7 @@ test("prolonged outages back off to hourly and recovery resets the next outage",
     ...options,
     fetchSelectors: async () => [EXISTING],
   })
+  // Assert
   assert.equal(recovery.nextCheckAt, time + SIX_HOURS)
   time = recovery.nextCheckAt
   const nextOutage = await checkWhenDue(options)
