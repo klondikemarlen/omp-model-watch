@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.0 — 2026-11-24
+
+- Check every six hours by default, with a configurable interval per profile. Failed discovery retries after one minute and doubles the wait up to one hour until recovery.
+
 ## 0.1.2 — 2026-11-24
 
 - `/model-watch status` now shows how long until the next check or retry instead of a clock time and timezone. The countdown is recalculated whenever you ask.
