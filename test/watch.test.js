@@ -37,21 +37,27 @@ test("when discovery stays offline, backs off to hourly and resets after recover
     },
   }
 
+  const expectedMinutes = [1, 2, 4, 8, 16, 32, 60, 60]
+  const observedMinutes = []
+
   // Act
-  for (const minutes of [1, 2, 4, 8, 16, 32, 60, 60]) {
+  for (let attempt = 0; attempt < expectedMinutes.length; attempt++) {
     const failure = await checkWhenDue(options)
-    assert.equal(failure.nextCheckAt, time + minutes * MINUTE)
+    observedMinutes.push((failure.nextCheckAt - time) / MINUTE)
     time = failure.nextCheckAt
   }
 
+  const recoveredAt = time
   const recovery = await checkWhenDue({
     ...options,
     fetchSelectors: async () => [EXISTING],
   })
-  // Assert
-  assert.equal(recovery.nextCheckAt, time + SIX_HOURS)
   time = recovery.nextCheckAt
   const nextOutage = await checkWhenDue(options)
+
+  // Assert
+  assert.deepEqual(observedMinutes, expectedMinutes)
+  assert.equal(recovery.nextCheckAt, recoveredAt + SIX_HOURS)
   assert.equal(nextOutage.nextCheckAt, time + MINUTE)
 })
 
