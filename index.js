@@ -1,4 +1,5 @@
 import { createFetchSelectors } from "./lib/catalog.js"
+import { intervalCommand } from "./lib/settings.js"
 import { checkWhenDue } from "./lib/watch.js"
 
 // OMP sorts footer status keys. Trainer owns zz-omp-trainer.hint.*.
@@ -74,6 +75,7 @@ export function registerModelWatch(pi, check) {
       try {
         const result = await check({
           agentDir: ctx.agentDir || pi.pi.getAgentDir(),
+          cwd: ctx.cwd,
           fetchSelectors,
           onAdded: showAdditions,
           signal: controller.signal,
@@ -115,15 +117,26 @@ export function registerModelWatch(pi, check) {
   })
 
   pi.registerCommand("model-watch", {
-    description: "Show catalog watch status or preview a sample footer hint (demo)",
+    description: "Show catalog watch status, preview a footer hint, or manage the check interval",
     getArgumentCompletions(prefix) {
-      return ["status", "demo"].filter(value => value.startsWith(prefix)).map(value => ({
+      const resetPrefix = /^interval\s+(\S+)$/.exec(prefix)?.[1]
+      if (resetPrefix && resetPrefix !== "reset" && "reset".startsWith(resetPrefix)) {
+        return [
+          {
+            value: "interval reset",
+            label: "reset",
+          },
+        ]
+      }
+
+      return ["status", "demo", "interval"].filter(value => value.startsWith(prefix)).map(value => ({
         value,
         label: value,
       }))
     },
-    handler(args, ctx) {
+    async handler(args, ctx) {
       if (!ctx.hasUI) return
+
       const action = args.trim()
       if (action === "demo") {
         const key = HINT_KEY + ".sample"
@@ -145,7 +158,22 @@ export function registerModelWatch(pi, check) {
         ctx.ui.notify(message, "info")
         return
       }
-      ctx.ui.notify("Usage: /model-watch [status|demo]", "info")
+
+      if (/^interval(?:\s|$)/.test(action)) {
+        const intervalArgs = action.split(/\s+/).slice(1)
+        try {
+          const message = await intervalCommand(intervalArgs, {
+            cwd: ctx.cwd,
+          })
+          ctx.ui.notify(message, "info")
+        } catch (error) {
+          ctx.ui.notify(error.message, "error")
+        }
+
+        return
+      }
+
+      ctx.ui.notify("Usage: /model-watch [status|demo|interval [hours|reset]]", "info")
     },
   })
 }

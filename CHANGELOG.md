@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.0 — 2026-11-24
+
+- Set the check interval in OMP's plugin settings, with `/model-watch interval`, or from `node bin/model-watch.js interval`.
+
 ## 0.2.0 — 2026-11-24
 
 - Check every six hours by default, with a configurable interval per profile. Failed discovery retries after one minute and doubles the wait up to one hour until recovery.
