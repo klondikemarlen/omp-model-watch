@@ -17,7 +17,7 @@ The first successful check quietly records the models already listed. Later chec
 
 Interactive main sessions check on startup when due and every six hours by default while open, even when idle. Nothing runs while OMP is closed.
 
-To change the interval, open **Settings → Plugins → omp-model-watch → checkIntervalHours**. You can also set the same value with `/model-watch interval 24` or, from the plugin directory, `node bin/model-watch.js interval 24`. Omit the number to read it; use `reset` instead of the number to restore six hours. The range is 1 to 596 hours; `1.5` means 90 minutes.
+To change the interval, open **Settings → Plugins → omp-model-watch → checkIntervalHours**. You can also set the profile value with `/model-watch interval 24` or, from the plugin directory, `node bin/model-watch.js interval 24`. Omit the number to read the effective interval. Use `reset` to clear the profile value; a project override still takes precedence, otherwise the interval returns to six hours. The range is 1 to 596 hours; `1.5` means 90 minutes.
 
 Changes apply at the next scheduled check or interactive startup. If you set a custom interval in v0.2.0's `model-watch/config.json`, enter that number once in plugin settings. The old file is not modified or used.
 

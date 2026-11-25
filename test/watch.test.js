@@ -335,7 +335,8 @@ test("when a competing process crashes, releases its exclusive check without los
   `
 
   // Act
-  const childArgs = ["--input-type=module", "--eval", holdLock, watchUrl.href, profile.agentDir, String(dueAt)]
+  const dueAtArgument = String(dueAt)
+  const childArgs = ["--input-type=module", "--eval", holdLock, watchUrl.href, profile.agentDir, dueAtArgument]
   const child = spawn(process.execPath, childArgs, {
     stdio: ["pipe", "pipe", "inherit"],
   })
