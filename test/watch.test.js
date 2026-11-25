@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { once } from "node:events"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -22,15 +22,18 @@ async function createProfile(t) {
       force: true,
     })
   })
-  return agentDir
+  return {
+    agentDir,
+    getIntervalHours: () => 6,
+  }
 }
 
 test("when discovery stays offline, backs off to hourly and resets after recovery", async (t) => {
   // Arrange
-  const agentDir = await createProfile(t)
+  const profile = await createProfile(t)
   let time = START
   const options = {
-    agentDir,
+    ...profile,
     now: () => time,
     fetchSelectors: async () => {
       throw new Error("offline")
@@ -63,11 +66,11 @@ test("when discovery stays offline, backs off to hourly and resets after recover
 
 test("when the profile is new, records a silent baseline and waits six hours to refresh", async (t) => {
   // Arrange
-  const agentDir = await createProfile(t)
+  const profile = await createProfile(t)
   let time = START
   let fetchCount = 0
   const options = {
-    agentDir,
+    ...profile,
     now: () => time,
     fetchSelectors: async () => {
       fetchCount += 1
@@ -99,13 +102,35 @@ test("when the profile is new, records a silent baseline and waits six hours to 
   assert.equal(fetchCount, 2)
 })
 
+test("when a legacy interval file remains, uses the effective interval and leaves the file untouched", async (t) => {
+  // Arrange
+  const profile = await createProfile(t)
+  const watchDir = join(profile.agentDir, "model-watch")
+  const oldConfig = join(watchDir, "config.json")
+  const oldContents = '{"checkIntervalHours":24}'
+  await mkdir(watchDir)
+  await writeFile(oldConfig, oldContents)
+
+  // Act
+  const result = await checkWhenDue({
+    ...profile,
+    getIntervalHours: () => 12,
+    now: () => START,
+    fetchSelectors: async () => [EXISTING],
+  })
+
+  // Assert
+  assert.equal(result.nextCheckAt, START + 12 * 60 * MINUTE)
+  assert.equal(await readFile(oldConfig, "utf8"), oldContents)
+})
+
 test("when listings disappear and return, reports only previously unseen selectors", async (t) => {
   // Arrange
-  const agentDir = await createProfile(t)
+  const profile = await createProfile(t)
   let time = START
   let selectors = [EXISTING]
   const options = {
-    agentDir,
+    ...profile,
     now: () => time,
     fetchSelectors: async () => selectors,
   }
@@ -140,16 +165,16 @@ test("when listings disappear and return, reports only previously unseen selecto
 
 test("when the interval increases after failure, retries on time before adopting the longer interval", async (t) => {
   // Arrange
-  const agentDir = await createProfile(t)
+  const profile = await createProfile(t)
   await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => START,
     fetchSelectors: async () => [EXISTING],
   })
 
   // Act
   const failure = await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => START + SIX_HOURS,
     fetchSelectors: async () => {
       throw new Error("catalog unavailable")
@@ -164,12 +189,9 @@ test("when the interval increases after failure, retries on time before adopting
     error: "catalog unavailable",
   })
 
-  await writeFile(join(agentDir, "model-watch", "config.json"), JSON.stringify({
-    checkIntervalHours: 48,
-  }))
-
   const deferred = await checkWhenDue({
-    agentDir,
+    ...profile,
+    getIntervalHours: () => assert.fail("should not read settings during shared backoff"),
     now: () => retryAt - 1,
     fetchSelectors: async () => assert.fail("should not fetch during shared backoff"),
   })
@@ -178,7 +200,8 @@ test("when the interval increases after failure, retries on time before adopting
   assert.match(deferred.error, /last model catalog check failed/)
 
   assert.deepEqual(await checkWhenDue({
-    agentDir,
+    ...profile,
+    getIntervalHours: () => 48,
     now: () => retryAt,
     fetchSelectors: async () => [EXISTING, NEW],
   }), {
@@ -189,11 +212,11 @@ test("when the interval increases after failure, retries on time before adopting
 
 test("when the first catalog is empty, waits for a valid baseline", async (t) => {
   // Arrange
-  const agentDir = await createProfile(t)
+  const profile = await createProfile(t)
 
   // Act
   const failure = await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => START,
     fetchSelectors: async () => [],
   })
@@ -207,7 +230,7 @@ test("when the first catalog is empty, waits for a valid baseline", async (t) =>
 
   const { nextCheckAt } = failure
   assert.deepEqual(await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => nextCheckAt,
     fetchSelectors: async () => [EXISTING, NEW],
   }), {
@@ -218,12 +241,12 @@ test("when the first catalog is empty, waits for a valid baseline", async (t) =>
 
 test("when the session aborts discovery, leaves another terminal free to establish the baseline", async (t) => {
   // Arrange
-  const agentDir = await createProfile(t)
+  const profile = await createProfile(t)
   const controller = new AbortController()
 
   // Act
   const result = await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => START,
     signal: controller.signal,
     fetchSelectors: async (signal) => {
@@ -238,7 +261,7 @@ test("when the session aborts discovery, leaves another terminal free to establi
 
   let fetchCount = 0
   assert.deepEqual(await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => START,
     fetchSelectors: async () => {
       fetchCount += 1
@@ -253,14 +276,14 @@ test("when the session aborts discovery, leaves another terminal free to establi
 
 test("when shutdown interrupts the footer, the next session can still show the new listing", async (t) => {
   // Arrange
-  const agentDir = await createProfile(t)
+  const profile = await createProfile(t)
   await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => START,
     fetchSelectors: async () => [EXISTING],
   })
   const due = {
-    agentDir,
+    ...profile,
     now: () => START + SIX_HOURS,
     fetchSelectors: async () => [EXISTING, NEW],
   }
@@ -286,9 +309,9 @@ test("when a competing process crashes, releases its exclusive check without los
   timeout: 10_000,
 }, async (t) => {
   // Arrange
-  const agentDir = await createProfile(t)
+  const profile = await createProfile(t)
   await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => START,
     fetchSelectors: async () => [EXISTING],
   })
@@ -301,6 +324,7 @@ test("when a competing process crashes, releases its exclusive check without los
     process.stdin.resume()
     await checkWhenDue({
       agentDir,
+      getIntervalHours: () => 6,
       now: () => Number(dueAt),
       fetchSelectors: () => {
         process.stdout.write("fetching\\n")
@@ -311,7 +335,9 @@ test("when a competing process crashes, releases its exclusive check without los
   `
 
   // Act
-  const child = spawn(process.execPath, ["--input-type=module", "--eval", holdLock, watchUrl.href, agentDir, String(dueAt)], {
+  const dueAtArgument = String(dueAt)
+  const childArgs = ["--input-type=module", "--eval", holdLock, watchUrl.href, profile.agentDir, dueAtArgument]
+  const child = spawn(process.execPath, childArgs, {
     stdio: ["pipe", "pipe", "inherit"],
   })
   const exited = once(child, "exit")
@@ -328,7 +354,7 @@ test("when a competing process crashes, releases its exclusive check without los
 
     // Assert
     assert.deepEqual(await checkWhenDue({
-      agentDir,
+      ...profile,
       now: () => dueAt,
       fetchSelectors: async () => assert.fail("should not fetch while another process holds the lock"),
     }), {
@@ -341,7 +367,7 @@ test("when a competing process crashes, releases its exclusive check without los
   }
 
   assert.deepEqual(await checkWhenDue({
-    agentDir,
+    ...profile,
     now: () => dueAt + MINUTE,
     fetchSelectors: async () => [EXISTING, NEW],
   }), {

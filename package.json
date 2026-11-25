@@ -1,11 +1,15 @@
 {
   "name": "omp-model-watch",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Passive OMP hints for newly listed provider models.",
   "type": "module",
   "private": true,
+  "bin": {
+    "model-watch": "./bin/model-watch.js"
+  },
   "files": [
     "index.js",
+    "bin",
     "lib",
     "README.md",
     "CHANGELOG.md"
@@ -20,6 +24,15 @@
     "globals": "^17.14.0"
   },
   "omp": {
+    "settings": {
+      "checkIntervalHours": {
+        "type": "number",
+        "description": "Hours between successful catalog checks",
+        "default": 6,
+        "min": 1,
+        "max": 596
+      }
+    },
     "extensions": [
       "./index.js"
     ]

@@ -15,15 +15,11 @@ The first successful check quietly records the models already listed. Later chec
 - `/model-watch status` — see whether the watch is healthy or unavailable and how long until its next check, for example `Next check in 3 hours 12 minutes.`
 - `/model-watch demo` — show a labeled example in the footer for eight seconds, without querying the provider or changing watch state.
 
-Interactive main sessions check on startup when due and every 6 hours by default while open, even when idle. Nothing runs while OMP is closed. To change the interval for all terminals in a profile, create `model-watch/config.json` inside the active OMP agent directory (normally `~/.omp/agent`). For example, to check once a day:
+Interactive main sessions check on startup when due and every six hours by default while open, even when idle. Nothing runs while OMP is closed.
 
-```json
-{
-  "checkIntervalHours": 24
-}
-```
+To change the interval, open **Settings → Plugins → omp-model-watch → checkIntervalHours**. You can also set the profile value with `/model-watch interval 24` or, from the plugin directory, `node bin/model-watch.js interval 24`. Omit the number to read the effective interval. Use `reset` to clear the profile value; a project override still takes precedence, otherwise the interval returns to six hours. The range is 1 to 596 hours; `1.5` means 90 minutes.
 
-Use a whole number from 1 to 596 hours (the host timer limit). Remove the setting or file to restore 6 hours. The next startup or scheduled check reads the setting and measures from the last successful check; editing the file alone does not wake an idle timer.
+Changes apply at the next scheduled check or interactive startup. If you set a custom interval in v0.2.0's `model-watch/config.json`, enter that number once in plugin settings. The old file is not modified or used.
 
 If discovery fails, Model Watch keeps the last good list. It retries after 1 minute, then 2, 4, 8, 16, 32, and at most 60 minutes between attempts. Terminals share the retry deadline. A successful check resets backoff and resumes the normal interval. Use `/model-watch status` for the countdown.
 
